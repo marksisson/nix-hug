@@ -75,6 +75,7 @@ let
       repoInfoHash ? null,
       fileTreeHash,
       isDataset ? false,
+      token ? null,
     }:
     let
       repoId = "${org}/${repo}";
@@ -91,6 +92,9 @@ let
             (fetchurl {
               url = "${apiBase}/${repoId}";
               sha256 = repoInfoHash;
+              curlOptsList = lib.optionals (token != null) [
+                "-H" "Authorization: Bearer ${token}"
+              ];
             })
         else
           null;
@@ -111,6 +115,9 @@ let
         readFile (fetchurl {
           url = "${apiBase}/${repoId}/tree/${rev}?recursive=true";
           sha256 = fileTreeHash;
+          curlOptsList = lib.optionals (token != null) [
+            "-H" "Authorization: Bearer ${token}"
+          ];
         })
       );
 
@@ -138,8 +145,8 @@ let
       repoInfoHash ? null, # deprecated — kept for backward compat
       fileTreeHash,
       derivationHash ? null, # deprecated — kept for backward compat
-    }:
-    let
+      token ? null,
+    }: let
       parsed = mkRepoId url isDataset;
       typePrefix = if isDataset then "datasets/" else "";
       typeName = if isDataset then "dataset" else "model";
@@ -152,6 +159,7 @@ let
           repoInfoHash
           fileTreeHash
           isDataset
+          token
           ;
       };
 
@@ -160,17 +168,29 @@ let
         rev = repoInfo.resolvedRev;
       };
 
-      filteredLfsFiles = applyFilter filters repoInfo.lfsFiles;
+      #filteredLfsFiles = applyFilter filters repoInfo.lfsFiles;
+      filteredLfsFiles = repoInfo.lfsFiles;
 
+        #${if filteredLfsFiles != null then "filteredLfsFiles: " + builtins.toString filteredLfsFiles else "no LFS files"}
       lfsDerivations = map (file: {
         name = file.path;
         drv = fetchurl {
           url = "https://huggingface.co/${typePrefix}${repoInfo.repoId}/resolve/${repoInfo.resolvedRev}/${file.path}";
           sha256 = file.lfs.oid;
+          curlOptsList = lib.optionals (token != null) [
+            "-H" "Authorization: Bearer ${token}"
+          ];
         };
       }) filteredLfsFiles;
-    in
-    pkgs.runCommand "hf-${typeName}-${repoInfo.org}-${repoInfo.repo}-${repoInfo.resolvedRev}"
+
+      fetchedFiles = fetchurl {
+            url = "https://huggingface.co/api/${typeApi}/${repoInfo.repoId}/tree/${rev}?recursive=true";
+            sha256 = fileTreeHash;
+            curlOptsList = lib.optionals (token != null) [
+              "-H" "Authorization: Bearer ${token}"
+            ];
+          };
+    in pkgs.runCommand "hf-${typeName}-${repoInfo.org}-${repoInfo.repo}-${repoInfo.resolvedRev}"
       (
         {
           passthru = {
@@ -205,13 +225,9 @@ let
             ''echo '{"id":"${repoInfo.repoId}","sha":"${repoInfo.resolvedRev}"}' > $out/.nix-hug-repoinfo.json''
         }
 
-        cp ${
-          fetchurl {
-            url = "https://huggingface.co/api/${typeApi}/${repoInfo.repoId}/tree/${rev}?recursive=true";
-            sha256 = fileTreeHash;
-          }
-        } $out/.nix-hug-filetree.json
-      '';
+        cp ${fetchedFiles} $out/.nix-hug-filetree.json
+      ''
+    ;
 
   fetchModel = fetchRepo false;
   fetchDataset = fetchRepo true;
@@ -280,6 +296,7 @@ let
       lfsUrl,
       name ? null,
       filters ? null,
+      token ? null,
     }:
     let
       gitRepo = fetchGit { inherit url rev; };
@@ -295,6 +312,9 @@ let
         drv = fetchurl {
           url = effectiveLfsUrl rev file.path;
           sha256 = file.lfs.oid;
+          curlOptsList = lib.optionals (token != null) [
+            "-H" "Authorization: Bearer ${token}"
+          ];
         };
       }) filteredLfsFiles;
 
@@ -306,8 +326,7 @@ let
         else
           "git-repo-${rev}";
       effectiveName = if name != null then name else derivedName;
-    in
-    pkgs.runCommand effectiveName {
+    in pkgs.runCommand effectiveName {
       passthru = {
         revision = rev;
         gitUrl = url;
