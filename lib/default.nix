@@ -78,14 +78,6 @@ let
 
       revIsCommitHash = rev != null && builtins.match "[0-9a-f]{40}" rev != null;
 
-      # Every URL keys off the commit hash whenever there is one, never off the
-      # tag. That is what makes the "comment out the tag line" remedy below a
-      # real one: fileTreeHash and the LFS URLs do not depend on the tag, so
-      # removing it changes nothing else and no other hash has to be refreshed.
-      # Going through checkedRev rather than rev is deliberate: it forces the
-      # drift check before any URL is built, so a moved tag reports the
-      # actionable error below instead of whatever 404 or hash mismatch the
-      # first-forced fetch would have produced.
       ref =
         if revIsCommitHash then
           (if tag != null then checkedRev else rev)
@@ -104,10 +96,6 @@ let
         sha256 = repoInfoHash;
       };
 
-      # A tag with no commit-hash rev has nothing to fall back on, and the fetch
-      # above runs during EVALUATION: every `nix eval` that touches this model
-      # pays a network round-trip, which is exactly what pinning by commit hash
-      # exists to avoid.
       warnBareTag =
         x:
         if tag != null && !revIsCommitHash then
@@ -121,8 +109,6 @@ let
         else
           x;
 
-      # tag + rev, but no repoInfoHash: nothing to compare against, so the tag
-      # is inert rather than a check. Say so instead of silently ignoring it.
       warnUncheckedTag =
         x:
         if tag != null && revIsCommitHash && repoInfoHash == null then
@@ -150,9 +136,6 @@ let
       upstreamRev =
         if repoInfoData != null then (repoInfoData.sha or repoInfoData.commit or null) else null;
 
-      # The rev is the pin; the tag is a canary. If upstream moved the tag off
-      # the pinned commit, stop -- building anyway would quietly produce
-      # something other than what the tag now names.
       checkedRev =
         if upstreamRev != null && upstreamRev != rev then
           throw ''
@@ -236,9 +219,6 @@ let
       repoId == null || url == null
     ) "nix-hug: pass either repoId or url, not both.";
     assert lib.assertMsg (repoId != null || url != null) "nix-hug: repoId is required.";
-    # rev and tag together is the recommended shape, not an error: the rev is the
-    # pin the build uses, the tag is checked against it and reported if upstream
-    # moved. Only "neither" is a mistake.
     assert lib.assertMsg (rev != null || tag != null) "nix-hug: pass rev, tag, or both.";
     assert lib.assertMsg (gitRepoHash != null) ''
       nix-hug: gitRepoHash is required; the non-LFS checkout is a fixed-output derivation.
@@ -277,11 +257,11 @@ let
         filters
         repoType
         ;
-      repoId = repoInfo.repoId;
+      inherit (repoInfo) repoId;
       rev = repoInfo.resolvedRev;
       backend = "lfs";
       hash = gitRepoHash;
-      lfsFiles = repoInfo.lfsFiles;
+      inherit (repoInfo) lfsFiles;
       name = "hf-${repoType}-${repoInfo.org}-${repoInfo.repo}-${repoInfo.resolvedRev}";
       passthru = {
         inherit (parsed) org repo repoId;
@@ -459,9 +439,9 @@ let
       itemInfos = map (
         tagged:
         let
-          item = tagged.item;
+          inherit (tagged) item;
           inherit (item) org repo revision;
-          isDataset = tagged.isDataset;
+          inherit (tagged) isDataset;
         in
         {
           inherit
@@ -514,7 +494,7 @@ in
     maintainers = [ ];
   };
   version = {
-    lib = "6.0.0";
+    lib = "6.0.1";
     api = 1;
   };
 }

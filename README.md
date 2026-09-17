@@ -53,28 +53,6 @@ in
   }
 ```
 
-## Table of Contents
-
-- [Quick Start](#quick-start)
-- [How It Works](#how-it-works)
-- [Installation](#installation)
-- [CLI Reference](#cli-reference)
-  - [fetch](#fetch)
-  - [ls](#ls)
-  - [export](#export)
-  - [import](#import)
-  - [import-all](#import-all)
-  - [scan](#scan)
-- [Nix Library](#nix-library)
-  - [fetchModel / fetchDataset / fetchSpace](#fetchmodel--fetchdataset--fetchspace)
-  - [What each combination costs](#what-each-combination-costs)
-  - [Upgrading to 6.0 from 5.1](#upgrading-to-60-from-51)
-  - [buildCache](#buildcache)
-- [URL Formats](#url-formats)
-- [Library interface](#library-interface)
-- [Development](#development)
-- [License](#license)
-
 ## Quick Start
 
 Add nix-hug to your flake inputs:
@@ -289,9 +267,6 @@ directory. This makes the model available to `transformers`, `diffusers`, and
 other HF libraries, and preserves it outside the Nix store (surviving garbage
 collection).
 
-The cache location is determined by `$HF_HUB_CACHE`, `$HF_HOME/hub`, or
-defaults to `$XDG_CACHE_HOME/huggingface/hub/`.
-
 Accepts the same filter options as `fetch`.
 
 ```console
@@ -309,19 +284,12 @@ Use `nix-hug scan` to see what's available before importing.
 The imported store path has the same layout as `nix-hug fetch`, so the output
 can be used with `buildCache` and `nix build`.
 
-The cache location is determined by `$HF_HUB_CACHE`, `$HF_HOME/hub`, or
-defaults to `$XDG_CACHE_HOME/huggingface/hub/`.
-
 ```console
 $ nix-hug import <url> [options]
 ```
 
-Options:
-
-- `--ref REF`: match a specific revision
-- `--include PATTERN`: include files matching a glob pattern
-- `--exclude PATTERN`: exclude files matching a glob pattern
-- `--file FILENAME`: include a specific file by name
+Options: `--ref REF` matches a specific revision; the filter options
+(`--include`, `--exclude`, `--file`) are the same as `fetch`.
 
 ```console
 $ nix-hug import openai-community/gpt2
@@ -342,9 +310,6 @@ $ nix-hug import-all --yes    # no confirmation prompt
 
 Lists all models and datasets in the local HuggingFace cache. Useful for
 discovering what's available before running `import`.
-
-The cache location is determined by `$HF_HUB_CACHE`, `$HF_HOME/hub`, or
-defaults to `$XDG_CACHE_HOME/huggingface/hub/`.
 
 ```console
 $ nix-hug scan

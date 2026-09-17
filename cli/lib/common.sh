@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # used by sourcing scripts
-VERSION="6.0.0"
+VERSION="6.0.1"
 
 declare -A LOG_LEVELS=(
   [TRACE]=0
@@ -90,7 +90,7 @@ check_dependencies() {
     exit 1
   fi
 
-  if ! curl -s --connect-timeout 5 --max-time 10 https://huggingface.co/ >/dev/null 2>&1; then
+  if ! curl -sI --connect-timeout 5 --max-time 10 https://huggingface.co/ >/dev/null 2>&1; then
     warn "No internet connectivity to Hugging Face - some operations may fail"
   fi
 
@@ -147,16 +147,23 @@ sanitize_hf_url() {
 
   debug "Checking repository type for: $repo_path"
 
-  local kind http_code
+  local kind http_code probe_dir
+  probe_dir=$(mktemp -d)
   for kind in datasets models spaces; do
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" -L \
-      "https://huggingface.co/api/$kind/$repo_path" 2>/dev/null || echo "000")
+    curl -s -o /dev/null -w "%{http_code}" -L \
+      "https://huggingface.co/api/$kind/$repo_path" >"$probe_dir/$kind" 2>/dev/null &
+  done
+  wait
+  for kind in datasets models spaces; do
+    http_code=$(<"$probe_dir/$kind")
     if [[ "$http_code" == "200" ]]; then
+      rm -rf "$probe_dir"
       debug "Detected as $kind repository"
       echo "$kind/$repo_path"
       return 0
     fi
   done
+  rm -rf "$probe_dir"
 
   if [[ "$original_url" =~ dataset ]]; then
     debug "URL contains 'dataset', assuming dataset repository"
@@ -170,16 +177,26 @@ sanitize_hf_url() {
 }
 
 format_size() {
-  local bytes=$1
+  local bytes=$1 unit suffix tenths rem
   if ((bytes < 1024)); then
     echo "${bytes} B"
-  elif ((bytes < 1048576)); then
-    echo "$((bytes / 1024)) KB"
-  elif ((bytes < 1073741824)); then
-    awk "BEGIN { printf \"%.1f MB\", $bytes / 1048576 }"
-  else
-    awk "BEGIN { printf \"%.1f GB\", $bytes / 1073741824 }"
+    return
   fi
+  if ((bytes < 1048576)); then
+    echo "$((bytes / 1024)) KB"
+    return
+  fi
+  if ((bytes < 1073741824)); then
+    unit=1048576 suffix=MB
+  else
+    unit=1073741824 suffix=GB
+  fi
+  tenths=$((bytes * 10 / unit))
+  rem=$((bytes * 10 % unit))
+  if ((rem * 2 > unit || (rem * 2 == unit && tenths % 2 == 1))); then
+    tenths=$((tenths + 1))
+  fi
+  echo "$((tenths / 10)).$((tenths % 10)) $suffix"
 }
 
 parse_url() {

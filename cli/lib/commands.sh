@@ -494,10 +494,10 @@ export_to_hf_cache() {
     fi
 
     local snap_file="$snapshot_dir/$fpath"
-    mkdir -p "$(dirname "$snap_file")"
+    mkdir -p "${snap_file%/*}"
 
-    local depth rel_prefix="../.."
-    depth=$(echo "$fpath" | tr -cd '/' | wc -c)
+    local slashes="${fpath//[!\/]/}"
+    local depth=${#slashes} rel_prefix="../.."
     local i
     for ((i = 0; i < depth; i++)); do
       rel_prefix="../$rel_prefix"

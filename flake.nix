@@ -22,7 +22,7 @@
         pkgs:
         pkgs.stdenv.mkDerivation {
           pname = "nix-hug";
-          version = "6.0.0";
+          version = "6.0.1";
 
           src = pkgs.lib.fileset.toSource {
             root = ./.;
@@ -85,9 +85,13 @@
               } \
               --set NIX_HUG_LIB_DIR $out/share/nix-hug/lib \
               --set NIX_HUG_FLAKE_PATH ${
-                builtins.path {
-                  path = self.outPath;
-                  name = "nix-hug-source";
+                pkgs.lib.fileset.toSource {
+                  root = ./.;
+                  fileset = pkgs.lib.fileset.unions [
+                    ./flake.nix
+                    ./flake.lock
+                    ./lib
+                  ];
                 }
               }
           '';
@@ -190,8 +194,6 @@
             gitRepoHash = "sha256-SrdDsqK7grmWiB0nH4q78jUyGTta3ZX8UXuZCEhPwOw=";
           };
 
-          llamaTree = { inherit (llama) rev fileTreeHash; };
-
           llamaModel = extra: nix-hug-lib.fetchModel (llama // { repoId = llamaId; } // extra);
 
           tiny-llama = nix-hug-lib.fetchModel (llama // { url = llamaId; });
@@ -262,66 +264,66 @@
               echo "${note}" > $out
             '';
 
-          unsafe-vendored-git = builtins.tryEval (
-            (nix-hug-lib.fetchGitLFS {
-              url = "https://example.invalid/model.git";
-              rev = "0000000000000000000000000000000000000000";
-              lfsUrl = "https://example.invalid/model/resolve";
-              lfsFiles = unsafeLfsFiles;
-              gitRepoHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-            }).drvPath
-          );
+          unsafe-vendored-git =
+            builtins.tryEval
+              (nix-hug-lib.fetchGitLFS {
+                url = "https://example.invalid/model.git";
+                rev = "0000000000000000000000000000000000000000";
+                lfsUrl = "https://example.invalid/model/resolve";
+                lfsFiles = unsafeLfsFiles;
+                gitRepoHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+              }).drvPath;
 
-          unsafe-split = builtins.tryEval (
-            (nix-hug-lib.fetchFromHuggingFace {
-              repoId = "owner/model";
-              rev = "0000000000000000000000000000000000000000";
-              backend = "lfs";
-              hash = pkgs.lib.fakeHash;
-              lfsFiles = unsafeLfsFiles;
-            }).drvPath
-          );
+          unsafe-split =
+            builtins.tryEval
+              (nix-hug-lib.fetchFromHuggingFace {
+                repoId = "owner/model";
+                rev = "0000000000000000000000000000000000000000";
+                backend = "lfs";
+                hash = pkgs.lib.fakeHash;
+                lfsFiles = unsafeLfsFiles;
+              }).drvPath;
 
-          hashless-split = builtins.tryEval (
-            (nix-hug-lib.fetchFromHuggingFace {
-              repoId = "owner/model";
-              rev = "0000000000000000000000000000000000000000";
-              backend = "lfs";
-              lfsFiles = [
-                {
-                  path = "model.safetensors";
-                  lfs.oid = "0000000000000000000000000000000000000000000000000000000000000000";
-                }
-              ];
-            }).drvPath
-          );
+          hashless-split =
+            builtins.tryEval
+              (nix-hug-lib.fetchFromHuggingFace {
+                repoId = "owner/model";
+                rev = "0000000000000000000000000000000000000000";
+                backend = "lfs";
+                lfsFiles = [
+                  {
+                    path = "model.safetensors";
+                    lfs.oid = "0000000000000000000000000000000000000000000000000000000000000000";
+                  }
+                ];
+              }).drvPath;
 
-          hashless-model = builtins.tryEval (
-            (nix-hug-lib.fetchModel {
-              repoId = llamaId;
-              inherit (llama) rev fileTreeHash;
-              fileTree = builtins.fromJSON (builtins.readFile ./tests/fixtures/tiny-llama-tree.json);
-            }).drvPath
-          );
-
-          mistyped-repo-type = builtins.tryEval (
-            (nix-hug-lib.fetchModel (
-              llama
-              // {
+          hashless-model =
+            builtins.tryEval
+              (nix-hug-lib.fetchModel {
                 repoId = llamaId;
-                repoType = "dataset";
-              }
-            )).drvPath
-          );
+                inherit (llama) rev fileTreeHash;
+                fileTree = builtins.fromJSON (builtins.readFile ./tests/fixtures/tiny-llama-tree.json);
+              }).drvPath;
 
-          hashless-git = builtins.tryEval (
-            (nix-hug-lib.fetchGitLFS {
-              url = "https://example.invalid/model.git";
-              rev = "0000000000000000000000000000000000000000";
-              lfsUrl = "https://example.invalid/model/resolve";
-              lfsFiles = [ ];
-            }).drvPath
-          );
+          mistyped-repo-type =
+            builtins.tryEval
+              (nix-hug-lib.fetchModel (
+                llama
+                // {
+                  repoId = llamaId;
+                  repoType = "dataset";
+                }
+              )).drvPath;
+
+          hashless-git =
+            builtins.tryEval
+              (nix-hug-lib.fetchGitLFS {
+                url = "https://example.invalid/model.git";
+                rev = "0000000000000000000000000000000000000000";
+                lfsUrl = "https://example.invalid/model/resolve";
+                lfsFiles = [ ];
+              }).drvPath;
         in
         {
           cliFetchCacheTest =
@@ -481,7 +483,7 @@
               '';
 
         }
-        // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+        // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           buildCacheVMTest = pkgs.testers.nixosTest {
             name = "nix-hug-buildcache-vm-test";
 
